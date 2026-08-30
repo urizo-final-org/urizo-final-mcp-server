@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from axms_mcp_server import __version__
+from axms_mcp_server.cms.tools import register_cms_tools
 from axms_mcp_server.coding.tools import register_coding_tools
 from axms_mcp_server.common.auth import BearerTokenMiddleware, validate_service_token
 from axms_mcp_server.common.catalog import PRODUCTION_TOOL_NAMES, validate_known_catalog
@@ -31,11 +32,12 @@ def create_server(settings: Settings | None = None) -> MCPServer[Any]:
         instructions="Only tools explicitly registered by an approved feature may be called.",
         version=__version__,
     )
-    registered_tool_names = register_coding_tools(
+    coding_tool_names = register_coding_tools(
         server,
         active_settings.workspace_root,
         active_settings.git_executable,
     )
+    registered_tool_names = coding_tool_names + register_cms_tools(server)
     if registered_tool_names != PRODUCTION_TOOL_NAMES:
         raise ValueError("Production MCP registration does not match the approved catalog.")
 

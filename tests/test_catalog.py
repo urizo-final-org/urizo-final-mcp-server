@@ -35,7 +35,7 @@ class ToolCatalogTest(unittest.TestCase):
             set(KNOWN_TOOL_NAMES),
         )
 
-    def test_production_catalog_registers_only_the_approved_coding_tools(self) -> None:
+    def test_production_catalog_registers_only_the_approved_feature_tools(self) -> None:
         self.assertEqual(
             (
                 "read_file",
@@ -45,6 +45,12 @@ class ToolCatalogTest(unittest.TestCase):
                 "run_check",
                 "check_package_allowlist",
                 "scan_changed_files",
+                "resolve_cms_target",
+                "validate_cms_command",
+                "create_cms_preview",
+                "discard_cms_preview",
+                "revalidate_cms_preview",
+                "apply_cms_preview",
             ),
             PRODUCTION_TOOL_NAMES,
         )
