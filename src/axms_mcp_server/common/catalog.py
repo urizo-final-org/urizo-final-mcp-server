@@ -13,7 +13,7 @@ KNOWN_TOOL_CONTRACTS = tuple(
     for name in names
 )
 KNOWN_TOOL_NAMES = frozenset(contract.name for contract in KNOWN_TOOL_CONTRACTS)
-EMPTY_PRODUCTION_TOOL_NAMES: tuple[str, ...] = ()
+PRODUCTION_TOOL_NAMES: tuple[str, ...] = CODING_TOOL_NAMES
 
 
 def validate_known_catalog() -> None:

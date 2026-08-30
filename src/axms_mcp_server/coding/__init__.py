@@ -1,4 +1,4 @@
-"""Reserved Coding MCP tool names. No production handlers are registered in AI06-010."""
+"""Approved Coding MCP tool names registered by AI04-002."""
 
 TOOL_NAMES = (
     "read_file",

@@ -8,6 +8,8 @@ from axms_mcp_server.common.auth import validate_service_token
 
 
 DEFAULT_TOKEN_FILE = Path("/run/secrets/mcp_service_token")
+DEFAULT_WORKSPACE_ROOT = Path("/workspaces")
+DEFAULT_GIT_EXECUTABLE = Path("/usr/bin/git")
 DEFAULT_ALLOWED_HOSTS = (
     "mcp-server",
     "mcp-server:*",
@@ -36,6 +38,8 @@ class Settings:
     host: str = "0.0.0.0"
     port: int = 8091
     service_token_file: Path = DEFAULT_TOKEN_FILE
+    workspace_root: Path = DEFAULT_WORKSPACE_ROOT
+    git_executable: Path = DEFAULT_GIT_EXECUTABLE
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     allowed_origins: tuple[str, ...] = ()
     max_request_body_size: int = 65_536
@@ -48,6 +52,8 @@ class Settings:
             raise ValueError("AXMS_MCP_PORT must be between 1 and 65535.")
         if not self.allowed_hosts:
             raise ValueError("AXMS_MCP_ALLOWED_HOSTS must contain at least one host.")
+        if not self.git_executable.is_absolute():
+            raise ValueError("AXMS_MCP_GIT_EXECUTABLE must be an absolute path.")
         if self.max_request_body_size < 1 or self.max_request_body_size > 1_048_576:
             raise ValueError("AXMS_MCP_MAX_REQUEST_BODY_SIZE must be between 1 and 1048576.")
         if self.log_level.lower() not in ALLOWED_LOG_LEVELS:
@@ -61,6 +67,10 @@ class Settings:
             host=values.get("AXMS_MCP_HOST", "0.0.0.0"),
             port=_integer(values, "AXMS_MCP_PORT", 8091),
             service_token_file=Path(values.get("AXMS_MCP_SERVICE_TOKEN_FILE", str(DEFAULT_TOKEN_FILE))),
+            workspace_root=Path(values.get("AXMS_MCP_WORKSPACE_ROOT", str(DEFAULT_WORKSPACE_ROOT))),
+            git_executable=Path(
+                values.get("AXMS_MCP_GIT_EXECUTABLE", str(DEFAULT_GIT_EXECUTABLE))
+            ),
             allowed_hosts=_csv(values.get("AXMS_MCP_ALLOWED_HOSTS", default_hosts)),
             allowed_origins=_csv(values.get("AXMS_MCP_ALLOWED_ORIGINS", "")),
             max_request_body_size=_integer(values, "AXMS_MCP_MAX_REQUEST_BODY_SIZE", 65_536),
