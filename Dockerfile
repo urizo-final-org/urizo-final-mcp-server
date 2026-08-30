@@ -9,12 +9,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app/src" \
     PATH="/app/.venv/bin:$PATH" \
     AXMS_MCP_HOST="0.0.0.0" \
-    AXMS_MCP_PORT="8091"
+    AXMS_MCP_PORT="8091" \
+    AXMS_MCP_GIT_EXECUTABLE="/usr/bin/git" \
+    AXMS_MCP_WORKSPACE_ROOT="/workspaces"
 
 RUN groupadd --system --gid 10001 axms \
     && useradd --system --uid 10001 --gid axms --home-dir /app --shell /usr/sbin/nologin axms
 
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock README.md ./
 ARG UV_INSECURE_HOST=""

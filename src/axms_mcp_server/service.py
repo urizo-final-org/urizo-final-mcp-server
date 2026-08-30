@@ -11,8 +11,9 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from axms_mcp_server import __version__
+from axms_mcp_server.coding.tools import register_coding_tools
 from axms_mcp_server.common.auth import BearerTokenMiddleware, validate_service_token
-from axms_mcp_server.common.catalog import EMPTY_PRODUCTION_TOOL_NAMES, validate_known_catalog
+from axms_mcp_server.common.catalog import PRODUCTION_TOOL_NAMES, validate_known_catalog
 from axms_mcp_server.config import Settings
 
 
@@ -20,8 +21,9 @@ SERVER_NAME = "urizo-final-mcp-server"
 PROTOCOL_VERSION = "2026-07-28"
 
 
-def create_server() -> MCPServer[Any]:
+def create_server(settings: Settings | None = None) -> MCPServer[Any]:
     validate_known_catalog()
+    active_settings = settings or Settings()
     server: MCPServer[Any] = MCPServer(
         name=SERVER_NAME,
         title="AX Module Studio MCP Server",
@@ -29,6 +31,13 @@ def create_server() -> MCPServer[Any]:
         instructions="Only tools explicitly registered by an approved feature may be called.",
         version=__version__,
     )
+    registered_tool_names = register_coding_tools(
+        server,
+        active_settings.workspace_root,
+        active_settings.git_executable,
+    )
+    if registered_tool_names != PRODUCTION_TOOL_NAMES:
+        raise ValueError("Production MCP registration does not match the approved catalog.")
 
     @server.custom_route("/health/live", methods=["GET"], include_in_schema=False)
     async def live(_: Request) -> Response:
@@ -41,7 +50,7 @@ def create_server() -> MCPServer[Any]:
                 "status": "READY",
                 "service": SERVER_NAME,
                 "protocolVersion": PROTOCOL_VERSION,
-                "registeredToolCount": len(EMPTY_PRODUCTION_TOOL_NAMES),
+                "registeredToolCount": len(registered_tool_names),
             }
         )
 
@@ -50,7 +59,7 @@ def create_server() -> MCPServer[Any]:
 
 def create_application(settings: Settings, service_token: str) -> ASGIApp:
     validate_service_token(service_token)
-    server = create_server()
+    server = create_server(settings)
     application = server.streamable_http_app(
         streamable_http_path="/mcp",
         json_response=True,

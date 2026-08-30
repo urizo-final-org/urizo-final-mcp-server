@@ -3,9 +3,9 @@ from __future__ import annotations
 import unittest
 
 from axms_mcp_server.common.catalog import (
-    EMPTY_PRODUCTION_TOOL_NAMES,
     KNOWN_TOOL_CONTRACTS,
     KNOWN_TOOL_NAMES,
+    PRODUCTION_TOOL_NAMES,
     validate_known_catalog,
     validate_registered_tool_names,
 )
@@ -35,9 +35,23 @@ class ToolCatalogTest(unittest.TestCase):
             set(KNOWN_TOOL_NAMES),
         )
 
-    def test_production_catalog_starts_empty(self) -> None:
-        self.assertEqual((), EMPTY_PRODUCTION_TOOL_NAMES)
-        self.assertEqual(frozenset(), validate_registered_tool_names(EMPTY_PRODUCTION_TOOL_NAMES))
+    def test_production_catalog_registers_only_the_approved_coding_tools(self) -> None:
+        self.assertEqual(
+            (
+                "read_file",
+                "search_code",
+                "read_diff",
+                "apply_patch",
+                "run_check",
+                "check_package_allowlist",
+                "scan_changed_files",
+            ),
+            PRODUCTION_TOOL_NAMES,
+        )
+        self.assertEqual(
+            frozenset(PRODUCTION_TOOL_NAMES),
+            validate_registered_tool_names(PRODUCTION_TOOL_NAMES),
+        )
 
     def test_registration_rejects_unknown_or_duplicate_names(self) -> None:
         with self.assertRaises(ValueError):
