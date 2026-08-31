@@ -1,4 +1,4 @@
-"""Reserved Natural CMS MCP tool names. No production handlers are registered in AI06-010."""
+"""Approved Natural CMS MCP tool names."""
 
 TOOL_NAMES = (
     "resolve_cms_target",

@@ -10,8 +10,8 @@ import tempfile
 from starlette.testclient import TestClient
 
 from axms_mcp_server.config import Settings
+from axms_mcp_server.common.catalog import PRODUCTION_TOOL_NAMES
 from axms_mcp_server.service import PROTOCOL_VERSION, SERVER_NAME, create_application
-from axms_mcp_server.coding import TOOL_NAMES
 
 
 SERVICE_TOKEN = "t" * 43
@@ -82,7 +82,7 @@ class McpServiceTest(unittest.TestCase):
         self.assertEqual(200, ready.status_code)
         self.assertEqual("READY", ready.json()["status"])
         self.assertEqual(PROTOCOL_VERSION, ready.json()["protocolVersion"])
-        self.assertEqual(7, ready.json()["registeredToolCount"])
+        self.assertEqual(13, ready.json()["registeredToolCount"])
 
     def test_mcp_endpoint_requires_exact_bearer_token(self) -> None:
         application = create_application(_settings(), SERVICE_TOKEN)
@@ -241,7 +241,7 @@ class McpServiceTest(unittest.TestCase):
         self.assertEqual(421, invalid_host.status_code)
         self.assertEqual(403, invalid_origin.status_code)
 
-    def test_modern_discovery_and_coding_tools_catalog_round_trip(self) -> None:
+    def test_modern_discovery_and_feature_tools_catalog_round_trip(self) -> None:
         with TestClient(create_application(_settings(), SERVICE_TOKEN)) as client:
             discovery = client.post(
                 "/mcp",
@@ -263,7 +263,7 @@ class McpServiceTest(unittest.TestCase):
         )
         self.assertEqual(200, tools.status_code, tools.text)
         registered = tools.json()["result"]["tools"]
-        self.assertEqual(list(TOOL_NAMES), [tool["name"] for tool in registered])
+        self.assertEqual(list(PRODUCTION_TOOL_NAMES), [tool["name"] for tool in registered])
         expected_required = {
             "read_file": {"workspace", "expectedHead", "path"},
             "search_code": {"workspace", "expectedHead", "query"},
@@ -272,6 +272,16 @@ class McpServiceTest(unittest.TestCase):
             "run_check": {"workspace", "expectedHead", "expectedDiffDigest", "profile"},
             "check_package_allowlist": {"workspace", "expectedHead", "expectedDiffDigest"},
             "scan_changed_files": {"workspace", "expectedHead", "expectedDiffDigest"},
+            "resolve_cms_target": {"resource", "currentState"},
+            "validate_cms_command": {"resource", "command", "currentState"},
+            "create_cms_preview": {"resource", "command", "currentState"},
+            "discard_cms_preview": {"previewId", "previewHash"},
+            "revalidate_cms_preview": {
+                "previewId", "previewHash", "resource", "command", "currentState"
+            },
+            "apply_cms_preview": {
+                "previewId", "previewHash", "resource", "command", "currentState"
+            },
         }
         expected_properties = {
             "read_file": {"workspace", "expectedHead", "path"},
@@ -281,6 +291,16 @@ class McpServiceTest(unittest.TestCase):
             "run_check": {"workspace", "expectedHead", "expectedDiffDigest", "profile"},
             "check_package_allowlist": {"workspace", "expectedHead", "expectedDiffDigest"},
             "scan_changed_files": {"workspace", "expectedHead", "expectedDiffDigest"},
+            "resolve_cms_target": {"resource", "currentState"},
+            "validate_cms_command": {"resource", "command", "currentState"},
+            "create_cms_preview": {"resource", "command", "currentState"},
+            "discard_cms_preview": {"previewId", "previewHash"},
+            "revalidate_cms_preview": {
+                "previewId", "previewHash", "resource", "command", "currentState"
+            },
+            "apply_cms_preview": {
+                "previewId", "previewHash", "resource", "command", "currentState"
+            },
         }
         for tool in registered:
             with self.subTest(tool=tool["name"]):
