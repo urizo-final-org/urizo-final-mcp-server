@@ -11,5 +11,6 @@
 
 - Own only the single Python MCP runtime, shared transport/authentication boundary, approved Coding/CMS tool-name catalog, health endpoints, tests, image, and dependency lock.
 - Spring owns platform authorization, Job/Profile Version authority, Tool execution policy, and Core persistence. LangGraph owns coding workflow and checkpoints. Product repositories own feature UX and domain behavior.
-- Never add Core database, Valkey, checkpoint, or production tool implementations without an approved Work ID and Master scope expansion.
+- Within an approved Work ID, feature owners may fix function-internal logic and add parallel or remove unused leaf tools in their `coding` or `cms` package when the shared invocation, transport/authentication, authorization, and Spring final-persistence boundaries stay unchanged. Update catalog/allowlist/profile references and contract/scenario tests together; remove a tool only after confirming that no active profile, snapshot, or other consumer references it.
+- Never add Core database, Valkey, checkpoint, or changes to shared MCP contracts and platform boundaries without Master scope approval.
 - Keep Python/runtime pins, commands, and repository-local verification in `README.md`, `pyproject.toml`, and `uv.lock` rather than duplicating them in agent policy.
