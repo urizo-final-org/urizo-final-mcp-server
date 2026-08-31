@@ -19,6 +19,8 @@ from axms_mcp_server.cms.contract import (
 RESOURCE_TYPE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 RESOURCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+COMMAND_OPERATIONS = frozenset({"CREATE", "UPDATE", "DELETE"})
+FIELD_INTEGER_LIMIT = 2**53
 
 
 class NaturalCmsToolError(ValueError):
@@ -67,8 +69,11 @@ def create_preview(
 ) -> CmsPreview:
     normalized_resource, normalized_state = _target(resource, current_state)
     normalized_command = _command(command)
-    after = dict(normalized_state)
-    after.update(normalized_command["fields"])
+    after = (
+        {}
+        if normalized_command["operation"] == "DELETE"
+        else {**normalized_state, **normalized_command["fields"]}
+    )
     subject = {
         "resource": normalized_resource,
         "command": normalized_command,
@@ -164,20 +169,32 @@ def _command(command: dict[str, Any]) -> dict[str, Any]:
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command is invalid.")
     operation = command.get("operation")
     fields = command.get("fields")
-    if operation != "UPDATE" or not isinstance(fields, dict) or not fields:
+    if operation not in COMMAND_OPERATIONS or not isinstance(fields, dict):
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command is invalid.")
-    if any(
-        not isinstance(name, str)
-        or not name
-        or len(name) > 80
-        or not isinstance(value, str)
-        or len(value) > 20_000
-        for name, value in fields.items()
-    ):
+    if operation == "DELETE":
+        if fields:
+            raise NaturalCmsToolError(
+                "CMS_COMMAND_INVALID", "A DELETE command carries no fields."
+            )
+    elif not fields:
+        raise NaturalCmsToolError(
+            "CMS_COMMAND_INVALID", "A CREATE or UPDATE command requires at least one field."
+        )
+    if any(not _field(name, value) for name, value in fields.items()):
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command fields are invalid.")
     normalized = {"operation": operation, "fields": dict(fields)}
     _bounded_json(normalized)
     return normalized
+
+
+def _field(name: Any, value: Any) -> bool:
+    if not isinstance(name, str) or not name or len(name) > 80:
+        return False
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, int):
+        return -FIELD_INTEGER_LIMIT < value < FIELD_INTEGER_LIMIT
+    return isinstance(value, str) and len(value) <= 20_000
 
 
 def _preview_reference(preview_id: str, preview_hash: str) -> None:
