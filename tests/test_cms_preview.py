@@ -19,6 +19,11 @@ COMMAND = {
     "operation": "UPDATE",
     "fields": {"title": "After", "body": "New body"},
 }
+CREATE = {
+    "operation": "CREATE",
+    "fields": {"title": "New title", "body": "New body"},
+}
+DELETE = {"operation": "DELETE", "fields": {}}
 
 
 class NaturalCmsPreviewTest(unittest.TestCase):
@@ -85,6 +90,53 @@ class NaturalCmsPreviewTest(unittest.TestCase):
                 {**COMMAND, "workspaceId": "not-cms"},
                 CURRENT,
             )
+
+    def test_delete_carries_no_fields_and_leaves_nothing_behind(self) -> None:
+        preview = create_preview(RESOURCE, DELETE, CURRENT)
+
+        self.assertEqual({}, preview["after"])
+        self.assertEqual(CURRENT, preview["before"])
+        self.assertNotEqual(
+            create_preview(RESOURCE, COMMAND, CURRENT)["previewHash"],
+            preview["previewHash"],
+        )
+        self.assertTrue(
+            apply_preview(
+                preview["previewId"], preview["previewHash"], RESOURCE, DELETE, CURRENT
+            )["applyReady"]
+        )
+        with self.assertRaises(NaturalCmsToolError):
+            validate_command(RESOURCE, {**DELETE, "fields": {"title": "x"}}, CURRENT)
+
+    def test_create_needs_fields_and_starts_from_the_draft_state(self) -> None:
+        draft = {"id": "draft-1"}
+        resource = {"type": "CONTENT", "id": "draft-1"}
+        preview = create_preview(resource, CREATE, draft)
+
+        self.assertEqual(draft, preview["before"])
+        self.assertEqual("New title", preview["after"]["title"])
+        with self.assertRaises(NaturalCmsToolError):
+            validate_command(resource, {**CREATE, "fields": {}}, draft)
+
+    def test_accepts_number_boolean_and_null_fields_only(self) -> None:
+        accepted = {"position": 3, "active": True, "contentId": None, "title": "Kept"}
+        validated = validate_command(
+            RESOURCE, {"operation": "UPDATE", "fields": accepted}, CURRENT
+        )
+
+        self.assertEqual(accepted, validated["command"]["fields"])
+        for rejected in ({"ratio": 1.5}, {"parentId": 2**53}, {"tags": ["a"]}):
+            with self.assertRaises(NaturalCmsToolError):
+                validate_command(
+                    RESOURCE, {"operation": "UPDATE", "fields": rejected}, CURRENT
+                )
+
+    def test_rejects_operations_outside_the_approved_set(self) -> None:
+        for operation in ("REORDER", "PATCH", "update", ""):
+            with self.assertRaises(NaturalCmsToolError):
+                validate_command(
+                    RESOURCE, {"operation": operation, "fields": {"title": "x"}}, CURRENT
+                )
 
 
 if __name__ == "__main__":
