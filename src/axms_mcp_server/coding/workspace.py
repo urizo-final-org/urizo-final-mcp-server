@@ -945,6 +945,32 @@ class CodingWorkspace:
                 safe.append(line[:500])
         return "\n".join(safe)
 
+    @staticmethod
+    def _safe_git_failure(stderr: bytes, root: Path) -> str:
+        # Same discipline as _safe_check_details: never let file content or secret
+        # material ride out on an error path. Additionally the workspace root is
+        # masked, because a container path is nobody's business outside this host.
+        try:
+            text = stderr.decode("utf-8", errors="replace")
+        except Exception:
+            return ""
+        safe: list[str] = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            if line.startswith(("+", "-")) or any(
+                pattern.search(line) for _, pattern in SECRET_PATTERNS
+            ):
+                safe.append("[redacted]")
+            else:
+                safe.append(line.replace(str(root), "<workspace>")[:200])
+            if len(safe) >= 3:
+                break
+        # The Spring side truncates the refusal reason to 300 characters, so the
+        # essential first "error:" line must fit inside that window with room left
+        # for the prefix around it.
+        return " | ".join(safe)[:240]
+
     def _run_git(
         self,
         root: Path,
@@ -1013,7 +1039,14 @@ class CodingWorkspace:
         if len(result.stdout) + len(result.stderr) > MAX_GIT_OUTPUT_BYTES:
             raise CodingToolError("RESULT_TOO_LARGE", "The fixed Git operation returned too much output.")
         if result.returncode not in allowed_return_codes:
-            raise CodingToolError("TOOL_EXECUTION_FAILED", "The fixed Git operation failed.")
+            # git names the defect in stderr ("error: patch failed: PATH:LINE"). Dropping
+            # it here left the Coding Model retrying the same broken patch blind, so the
+            # reason travels along - masked and bounded by _safe_git_failure.
+            reason = self._safe_git_failure(result.stderr, root)
+            message = "The fixed Git operation failed."
+            if reason:
+                message = f"{message} git: {reason}"
+            raise CodingToolError("TOOL_EXECUTION_FAILED", message)
         return result
 
 
