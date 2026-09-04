@@ -115,6 +115,44 @@ new file mode 100644
             )
         self.assertEqual("CONTEXT_DIGEST_MISMATCH", diff_failure.exception.code)
 
+    def test_git_refusal_carries_its_reason_masked(self) -> None:
+        # The measured failure mode: a hunk whose context does not exist in the real
+        # file. (Line numbers alone are not enough to trip git - when the context
+        # matches, git apply finds the hunk by content and applies it at an offset.)
+        # git names the file and line in stderr; that reason must reach the caller
+        # instead of being dropped, with the container path masked.
+        patch = (
+            "diff --git a/README.md b/README.md\n"
+            "--- a/README.md\n"
+            "+++ b/README.md\n"
+            "@@ -177,1 +177,2 @@\n"
+            " context that the file never contained\n"
+            "+added line\n"
+        )
+        with self.assertRaisesRegex(CodingToolError, "git:") as failure:
+            self.service.apply_patch("job-1", self.head, EMPTY_DIFF_DIGEST, patch)
+        self.assertEqual("TOOL_EXECUTION_FAILED", failure.exception.code)
+        message = str(failure.exception)
+        self.assertIn("README.md", message)
+        self.assertNotIn(str(self.repository), message)
+        self.assertNotIn(self.temporary.name, message)
+
+    def test_safe_git_failure_masks_secrets_paths_and_bounds_length(self) -> None:
+        root = self.repository
+        stderr = (
+            f"error: patch failed: {root}/src/app.py:7\n"
+            "token = abcdef1234567890abcdef\n"
+            "error: " + "x" * 500 + "\n"
+            "one line too many\n"
+        ).encode("utf-8")
+        safe = CodingWorkspace._safe_git_failure(stderr, root)
+        self.assertIn("<workspace>/src/app.py:7", safe)
+        self.assertNotIn(str(root), safe)
+        self.assertNotIn("abcdef1234567890abcdef", safe)
+        self.assertIn("[redacted]", safe)
+        self.assertNotIn("one line too many", safe)
+        self.assertLessEqual(len(safe), 240)
+
     def test_path_confinement_and_fixed_protected_paths(self) -> None:
         denied = (
             "../README.md",
