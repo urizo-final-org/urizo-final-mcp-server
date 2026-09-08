@@ -1,6 +1,8 @@
 # AX Module Studio MCP Server
 
-Single Python MCP runtime for the shared AX Module Studio tool boundary. The service exposes one Streamable HTTP endpoint at `/mcp` and registers the seven approved Coding tools while keeping the reserved CMS tools disabled.
+Single Python MCP runtime for the shared AX Module Studio tool boundary. The
+service exposes one Streamable HTTP endpoint at `/mcp` and registers both the
+approved Coding and Natural CMS tool catalogs in `PRODUCTION_TOOL_NAMES`.
 
 ## Runtime boundary
 
