@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from copy import deepcopy
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -47,7 +48,7 @@ def validate_command(
     current_state: dict[str, Any],
 ) -> CmsValidation:
     normalized_resource, normalized_state = _target(resource, current_state)
-    normalized_command = _command(command)
+    normalized_command = _command(command, normalized_resource["type"])
     return {
         "valid": True,
         "validationHash": _digest(
@@ -68,11 +69,11 @@ def create_preview(
     current_state: dict[str, Any],
 ) -> CmsPreview:
     normalized_resource, normalized_state = _target(resource, current_state)
-    normalized_command = _command(command)
+    normalized_command = _command(command, normalized_resource["type"])
     after = (
         {}
         if normalized_command["operation"] == "DELETE"
-        else {**normalized_state, **normalized_command["fields"]}
+        else deepcopy({**normalized_state, **normalized_command["fields"]})
     )
     subject = {
         "resource": normalized_resource,
@@ -138,7 +139,7 @@ def apply_preview(
         "previewId": preview_id,
         "previewHash": preview_hash,
         "resource": normalized_resource,
-        "command": _command(command),
+        "command": _command(command, normalized_resource["type"]),
     }
 
 
@@ -161,16 +162,18 @@ def _target(
     if "id" in current_state and str(current_state["id"]) != resource_id:
         raise NaturalCmsToolError("CMS_TARGET_INVALID", "CMS resource id does not match.")
     _bounded_json(current_state)
-    return {"type": resource_type, "id": resource_id}, dict(current_state)
+    return {"type": resource_type, "id": resource_id}, deepcopy(current_state)
 
 
-def _command(command: dict[str, Any]) -> dict[str, Any]:
+def _command(command: dict[str, Any], resource_type: str) -> dict[str, Any]:
     if not isinstance(command, dict) or set(command) != {"operation", "fields"}:
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command is invalid.")
     operation = command.get("operation")
     fields = command.get("fields")
     if operation not in COMMAND_OPERATIONS or not isinstance(fields, dict):
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command is invalid.")
+    if resource_type == "TEMPLATE" and operation != "UPDATE":
+        raise NaturalCmsToolError("CMS_COMMAND_INVALID", "TEMPLATE accepts UPDATE only.")
     if operation == "DELETE":
         if fields:
             raise NaturalCmsToolError(
@@ -180,21 +183,39 @@ def _command(command: dict[str, Any]) -> dict[str, Any]:
         raise NaturalCmsToolError(
             "CMS_COMMAND_INVALID", "A CREATE or UPDATE command requires at least one field."
         )
-    if any(not _field(name, value) for name, value in fields.items()):
+    if any(not _field(name, value, resource_type) for name, value in fields.items()):
         raise NaturalCmsToolError("CMS_COMMAND_INVALID", "CMS command fields are invalid.")
-    normalized = {"operation": operation, "fields": dict(fields)}
+    normalized = {"operation": operation, "fields": deepcopy(fields)}
     _bounded_json(normalized)
     return normalized
 
 
-def _field(name: Any, value: Any) -> bool:
+def _field(name: Any, value: Any, resource_type: str) -> bool:
     if not isinstance(name, str) or not name or len(name) > 80:
         return False
+    if name == "heroImages":
+        return resource_type == "TEMPLATE" and _template_images(value)
     if value is None or isinstance(value, bool):
         return True
     if isinstance(value, int):
         return -FIELD_INTEGER_LIMIT < value < FIELD_INTEGER_LIMIT
     return isinstance(value, str) and len(value) <= 20_000
+
+
+def _template_images(value: Any) -> bool:
+    if not isinstance(value, list) or len(value) > 5:
+        return False
+    return all(
+        isinstance(image, dict)
+        and set(image) == {"url", "title", "description"}
+        and isinstance(image["url"], str)
+        and 0 < len(image["url"].strip()) <= 500
+        and isinstance(image["title"], str)
+        and len(image["title"]) <= 120
+        and isinstance(image["description"], str)
+        and len(image["description"]) <= 240
+        for image in value
+    )
 
 
 def _preview_reference(preview_id: str, preview_hash: str) -> None:

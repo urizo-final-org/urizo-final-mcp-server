@@ -27,6 +27,40 @@ DELETE = {"operation": "DELETE", "fields": {}}
 
 
 class NaturalCmsPreviewTest(unittest.TestCase):
+    def test_template_images_are_ordered_hashed_and_detached_from_input(self) -> None:
+        resource = {"type": "TEMPLATE", "id": "CLASSIC"}
+        images = [{"url": f"/api/site/images/{i}", "title": f"Photo {i}", "description": "Caption"} for i in range(1, 6)]
+        current = {"id": "CLASSIC", "heroImages": images, "heroTitle": "Before"}
+        command = {"operation": "UPDATE", "fields": {"heroImages": list(reversed(images))}}
+        preview = create_preview(resource, command, current)
+        self.assertEqual(5, len(preview["after"]["heroImages"]))
+        self.assertEqual(images[-1], preview["after"]["heroImages"][0])
+        self.assertTrue(apply_preview(preview["previewId"], preview["previewHash"], resource, command, current)["applyReady"])
+        changed = {**current, "heroImages": images[1:]}
+        self.assertFalse(revalidate_preview(preview["previewId"], preview["previewHash"], resource, command, changed)["valid"])
+        images[0]["title"] = "Edited elsewhere"
+        self.assertEqual("Photo 1", preview["before"]["heroImages"][0]["title"])
+        self.assertEqual("Photo 1", preview["after"]["heroImages"][-1]["title"])
+
+    def test_template_unlink_and_partial_update_preserve_other_fields(self) -> None:
+        resource = {"type": "TEMPLATE", "id": "BOLD"}
+        current = {"id": "BOLD", "heroTitle": "Title", "heroImages": [{"url": "/api/site/images/1", "title": "One", "description": "First"}]}
+        for fields in ({"heroImages": []}, {"heroTitle": "New"}):
+            preview = create_preview(resource, {"operation": "UPDATE", "fields": fields}, current)
+            self.assertEqual({**current, **fields}, preview["after"])
+
+    def test_nested_images_are_bounded_and_template_only(self) -> None:
+        image = {"url": "/api/site/images/1", "title": "One", "description": "First"}
+        for value in (None, [image] * 6, [{**image, "title": "x" * 121}], [{**image, "description": "x" * 241}], [{**image, "unknown": True}], ["url"]):
+            with self.subTest(value=value), self.assertRaises(NaturalCmsToolError):
+                validate_command({"type": "TEMPLATE", "id": "CLASSIC"}, {"operation": "UPDATE", "fields": {"heroImages": value}}, {})
+        for kind in ("CONTENT", "MENU", "BOARD"):
+            with self.subTest(kind=kind), self.assertRaises(NaturalCmsToolError):
+                validate_command({"type": kind, "id": "1"}, {"operation": "UPDATE", "fields": {"heroImages": [image]}}, {})
+        for operation in ("CREATE", "DELETE"):
+            with self.subTest(operation=operation), self.assertRaises(NaturalCmsToolError):
+                validate_command({"type": "TEMPLATE", "id": "CLASSIC"}, {"operation": operation, "fields": {}}, {})
+
     def test_preview_revalidation_and_apply_are_deterministic(self) -> None:
         resolved = resolve_target(RESOURCE, CURRENT)
         validated = validate_command(RESOURCE, COMMAND, CURRENT)
